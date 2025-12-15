@@ -12,6 +12,32 @@ class Tenet_Generator {
         $this->post_status = get_option( 'tenet_post_status', 'draft' );
     }
 
+    public function generate_automated_post() {
+        $keywords_raw = get_option( 'tenet_keywords_pool' );
+        if ( empty( $keywords_raw ) ) {
+            return; // Nothing to process
+        }
+
+        $keywords = array_filter( array_map( 'trim', explode( "\n", $keywords_raw ) ) );
+        if ( empty( $keywords ) ) {
+            return;
+        }
+
+        // Pick a random topic
+        $topic = $keywords[ array_rand( $keywords ) ];
+
+        // Get defaults
+        $tone = get_option( 'tenet_default_tone', 'Jornalístico' );
+        $audience = get_option( 'tenet_default_audience', 'Geral' );
+        $instructions = "Artigo gerado automaticamente a partir da keyword: $topic.";
+
+        try {
+            $this->generate_content( $topic, $tone, $audience, $instructions );
+        } catch ( Exception $e ) {
+            error_log( 'Tenet Auto-Post Error: ' . $e->getMessage() );
+        }
+    }
+
     public function generate_content( $topic, $tone, $audience, $instructions ) {
         if ( empty( $this->openai_key ) ) {
             throw new Exception( 'OpenAI API Key não configurada.' );
@@ -38,7 +64,7 @@ class Tenet_Generator {
             \"excerpt\": \"Resumo cativante\",
             \"meta_description\": \"Descrição para SEO\",
             \"tags\": \"tag1, tag2, tag3\",
-            \"pixabay_search_query\": \"Termo de busca em inglês para a imagem\"
+            \"pixabay_search_query\": \"SINGLE english broad keyword for image search (e.g. 'business', 'computer', 'nature'). One or two words max.\"
         }";
 
         $ai_data = $this->call_openai( $system_prompt, $user_prompt );

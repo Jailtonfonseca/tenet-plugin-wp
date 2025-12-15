@@ -38,6 +38,10 @@ class Tenet_Admin {
         register_setting( 'tenet_settings_group', 'tenet_openai_key' );
         register_setting( 'tenet_settings_group', 'tenet_pixabay_key' );
         register_setting( 'tenet_settings_group', 'tenet_post_status' );
+        register_setting( 'tenet_settings_group', 'tenet_keywords_pool' );
+        register_setting( 'tenet_settings_group', 'tenet_default_tone' );
+        register_setting( 'tenet_settings_group', 'tenet_default_audience' );
+        register_setting( 'tenet_settings_group', 'tenet_cron_frequency' );
     }
 
     public function render_settings_page() {
@@ -62,6 +66,28 @@ class Tenet_Admin {
                             <select name="tenet_post_status">
                                 <option value="draft" <?php selected( get_option('tenet_post_status'), 'draft' ); ?>>Rascunho</option>
                                 <option value="publish" <?php selected( get_option('tenet_post_status'), 'publish' ); ?>>Publicado</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Lista de Keywords (uma por linha)</th>
+                        <td><textarea name="tenet_keywords_pool" rows="10" cols="50" class="large-text"><?php echo esc_textarea( get_option('tenet_keywords_pool') ); ?></textarea></td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Tom de Voz Padrão (Automação)</th>
+                        <td><input type="text" name="tenet_default_tone" value="<?php echo esc_attr( get_option('tenet_default_tone', 'Jornalístico') ); ?>" class="regular-text" /></td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Público Alvo Padrão (Automação)</th>
+                        <td><input type="text" name="tenet_default_audience" value="<?php echo esc_attr( get_option('tenet_default_audience', 'Geral') ); ?>" class="regular-text" /></td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Frequência de Postagem Automática</th>
+                        <td>
+                            <select name="tenet_cron_frequency">
+                                <option value="off" <?php selected( get_option('tenet_cron_frequency'), 'off' ); ?>>Desativado</option>
+                                <option value="hourly" <?php selected( get_option('tenet_cron_frequency'), 'hourly' ); ?>>A cada hora</option>
+                                <option value="daily" <?php selected( get_option('tenet_cron_frequency'), 'daily' ); ?>>Diariamente</option>
                             </select>
                         </td>
                     </tr>
