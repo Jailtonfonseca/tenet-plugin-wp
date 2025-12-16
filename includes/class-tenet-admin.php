@@ -78,10 +78,11 @@ class Tenet_Admin {
             $topic = sanitize_text_field( $_POST['topic'] );
             $tone = sanitize_text_field( $_POST['tone'] );
             $audience = sanitize_text_field( $_POST['audience'] );
+            $category_id = isset( $_POST['category'] ) ? intval( $_POST['category'] ) : 0;
             $instructions = sanitize_textarea_field( $_POST['instructions'] );
 
             try {
-                $post_id = $this->generator->generate_content( $topic, $tone, $audience, $instructions );
+                $post_id = $this->generator->generate_content( $topic, $tone, $audience, $instructions, $category_id );
                 $message = '<div class="notice notice-success is-dismissible"><p>Conteúdo gerado com sucesso! Post ID: <a href="' . get_edit_post_link( $post_id ) . '">' . $post_id . '</a></p></div>';
             } catch ( Exception $e ) {
                 $message = '<div class="notice notice-error is-dismissible"><p>Erro: ' . esc_html( $e->getMessage() ) . '</p></div>';
@@ -113,6 +114,22 @@ class Tenet_Admin {
                     <tr>
                         <th scope="row"><label for="audience">Público Alvo</label></th>
                         <td><input name="audience" type="text" id="audience" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="category">Categoria</label></th>
+                        <td>
+                            <select name="category" id="category">
+                                <option value="0">Sem Categoria (Padrão)</option>
+                                <?php
+                                $categories = get_categories( array( 'hide_empty' => false ) );
+                                if ( ! empty( $categories ) && ! is_wp_error( $categories ) ) {
+                                    foreach ( $categories as $category ) {
+                                        echo '<option value="' . esc_attr( $category->term_id ) . '">' . esc_html( $category->name ) . '</option>';
+                                    }
+                                }
+                                ?>
+                            </select>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="instructions">Instruções Extras</label></th>
