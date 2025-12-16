@@ -12,7 +12,7 @@ class Tenet_Generator {
         $this->post_status = get_option( 'tenet_post_status', 'draft' );
     }
 
-    public function generate_content( $topic, $tone, $audience, $instructions ) {
+    public function generate_content( $topic, $tone, $audience, $instructions, $category_id = 0 ) {
         if ( empty( $this->openai_key ) ) {
             throw new Exception( 'OpenAI API Key não configurada.' );
         }
@@ -54,7 +54,7 @@ class Tenet_Generator {
             }
         }
 
-        return $this->create_post_in_wp( $ai_data, $image_id );
+        return $this->create_post_in_wp( $ai_data, $image_id, $category_id );
     }
 
     private function get_recent_post_titles( $limit ) {
@@ -159,7 +159,7 @@ class Tenet_Generator {
         return $id;
     }
 
-    private function create_post_in_wp( $data, $image_id ) {
+    private function create_post_in_wp( $data, $image_id, $category_id = 0 ) {
         $post_arr = array(
             'post_title'   => sanitize_text_field( $data['title'] ),
             'post_content' => wp_kses_post( $data['content'] ),
@@ -168,6 +168,10 @@ class Tenet_Generator {
             'post_type'    => 'post',
             'tags_input'   => sanitize_text_field( $data['tags'] ),
         );
+
+        if ( ! empty( $category_id ) ) {
+            $post_arr['post_category'] = array( $category_id );
+        }
 
         $post_id = wp_insert_post( $post_arr );
 
