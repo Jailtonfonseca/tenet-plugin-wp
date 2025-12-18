@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
 class Tenet_Admin {
 
     private $generator;
@@ -35,9 +39,9 @@ class Tenet_Admin {
     }
 
     public function register_settings() {
-        register_setting( 'tenet_settings_group', 'tenet_openai_key' );
-        register_setting( 'tenet_settings_group', 'tenet_pixabay_key' );
-        register_setting( 'tenet_settings_group', 'tenet_post_status' );
+        register_setting( 'tenet_settings_group', 'tenet_openai_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+        register_setting( 'tenet_settings_group', 'tenet_pixabay_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+        register_setting( 'tenet_settings_group', 'tenet_post_status', array( 'sanitize_callback' => 'sanitize_text_field' ) );
     }
 
     public function render_settings_page() {
