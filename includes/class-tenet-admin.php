@@ -5,7 +5,14 @@ class Tenet_Admin {
     private $generator;
 
     public function __construct() {
-        $this->generator = new Tenet_Generator();
+        // generator is lazy-loaded
+    }
+
+    private function get_generator() {
+        if ( ! isset( $this->generator ) ) {
+            $this->generator = new Tenet_Generator();
+        }
+        return $this->generator;
     }
 
     public function init() {
@@ -81,7 +88,7 @@ class Tenet_Admin {
             $instructions = sanitize_textarea_field( $_POST['instructions'] );
 
             try {
-                $post_id = $this->generator->generate_content( $topic, $tone, $audience, $instructions );
+                $post_id = $this->get_generator()->generate_content( $topic, $tone, $audience, $instructions );
                 $message = '<div class="notice notice-success is-dismissible"><p>Conteúdo gerado com sucesso! Post ID: <a href="' . get_edit_post_link( $post_id ) . '">' . $post_id . '</a></p></div>';
             } catch ( Exception $e ) {
                 $message = '<div class="notice notice-error is-dismissible"><p>Erro: ' . esc_html( $e->getMessage() ) . '</p></div>';
