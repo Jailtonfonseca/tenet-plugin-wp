@@ -79,9 +79,10 @@ class Tenet_Admin {
             $tone = sanitize_text_field( $_POST['tone'] );
             $audience = sanitize_text_field( $_POST['audience'] );
             $instructions = sanitize_textarea_field( $_POST['instructions'] );
+            $category_id = isset( $_POST['tenet_category'] ) ? intval( $_POST['tenet_category'] ) : 0;
 
             try {
-                $post_id = $this->generator->generate_content( $topic, $tone, $audience, $instructions );
+                $post_id = $this->generator->generate_content( $topic, $tone, $audience, $instructions, $category_id );
                 $message = '<div class="notice notice-success is-dismissible"><p>Conteúdo gerado com sucesso! Post ID: <a href="' . get_edit_post_link( $post_id ) . '">' . $post_id . '</a></p></div>';
             } catch ( Exception $e ) {
                 $message = '<div class="notice notice-error is-dismissible"><p>Erro: ' . esc_html( $e->getMessage() ) . '</p></div>';
@@ -113,6 +114,20 @@ class Tenet_Admin {
                     <tr>
                         <th scope="row"><label for="audience">Público Alvo</label></th>
                         <td><input name="audience" type="text" id="audience" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tenet_category">Categoria</label></th>
+                        <td>
+                            <?php
+                            wp_dropdown_categories( array(
+                                'name'              => 'tenet_category',
+                                'show_option_none'  => 'Sem categoria (Padrão)',
+                                'option_none_value' => '0',
+                                'class'             => 'regular-text',
+                                'hide_empty'        => 0,
+                            ) );
+                            ?>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="instructions">Instruções Extras</label></th>
