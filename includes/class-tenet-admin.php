@@ -4,9 +4,12 @@ class Tenet_Admin {
 
     private $generator;
 
-    public function __construct() {
-    }
-
+    /**
+     * Lazy-load the generator to avoid unnecessary DB calls (e.g. get_option)
+     * on pages where the generator is not used.
+     *
+     * @return Tenet_Generator
+     */
     private function get_generator() {
         if ( ! isset( $this->generator ) ) {
             $this->generator = new Tenet_Generator();
