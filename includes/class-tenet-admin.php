@@ -12,6 +12,7 @@ class Tenet_Admin {
      */
     private function get_generator() {
         if ( ! isset( $this->generator ) ) {
+            require_once TENET_PATH . 'includes/class-tenet-generator.php';
             $this->generator = new Tenet_Generator();
         }
         return $this->generator;
