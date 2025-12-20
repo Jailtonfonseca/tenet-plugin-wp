@@ -11,6 +11,9 @@ class Tenet_Admin {
     public function init() {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
+
+        // Register Async Generation Hook
+        add_action( 'tenet_async_generation_event', array( $this->generator, 'generate_content' ), 10, 5 );
     }
 
     public function add_admin_menu() {
@@ -175,11 +178,16 @@ class Tenet_Admin {
             $instructions = sanitize_textarea_field( $_POST['instructions'] );
             $category_id = isset( $_POST['tenet_category'] ) ? (int) $_POST['tenet_category'] : 0;
 
-            try {
-                $post_id = $this->generator->generate_content( $topic, $tone, $audience, $instructions, $category_id );
-                $message = '<div class="notice notice-success is-dismissible"><p>Conteúdo gerado com sucesso! Post ID: <a href="' . get_edit_post_link( $post_id ) . '">' . $post_id . '</a></p></div>';
-            } catch ( Exception $e ) {
-                $message = '<div class="notice notice-error is-dismissible"><p>Erro: ' . esc_html( $e->getMessage() ) . '</p></div>';
+            // Schedule Async Generation
+            $args = array( $topic, $tone, $audience, $instructions, $category_id );
+
+            if ( wp_schedule_single_event( time(), 'tenet_async_generation_event', $args ) ) {
+                 $message = '<div class="notice notice-success is-dismissible"><p>Geração de conteúdo agendada! O processo iniciou em segundo plano e pode levar alguns minutos. Verifique a lista de posts em breve.</p></div>';
+
+                 // Spawn cron immediately to avoid waiting for next page load
+                 spawn_cron();
+            } else {
+                 $message = '<div class="notice notice-error is-dismissible"><p>Erro ao agendar a tarefa. Verifique o sistema de CRON.</p></div>';
             }
         }
 
