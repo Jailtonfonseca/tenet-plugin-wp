@@ -5,20 +5,33 @@ class Tenet_Generator {
     private $openai_key;
     private $pixabay_key;
     private $post_status;
+    private $ai_provider;
+
+    // Model Configs
+    private $openai_model;
+    private $gemini_key;
+    private $gemini_model;
+    private $openrouter_key;
+    private $openrouter_model;
 
     public function __construct() {
-        $this->openai_key = get_option( 'tenet_openai_key' );
         $this->pixabay_key = get_option( 'tenet_pixabay_key' );
         $this->post_status = get_option( 'tenet_post_status', 'draft' );
+
+        $this->ai_provider = get_option( 'tenet_ai_provider', 'openai' );
+
+        $this->openai_key = get_option( 'tenet_openai_key' );
+        $this->openai_model = get_option( 'tenet_openai_model', 'gpt-4o' );
+
+        $this->gemini_key = get_option( 'tenet_gemini_key' );
+        $this->gemini_model = get_option( 'tenet_gemini_model', 'gemini-1.5-pro' );
+
+        $this->openrouter_key = get_option( 'tenet_openrouter_key' );
+        $this->openrouter_model = get_option( 'tenet_openrouter_model' );
     }
 
     public function generate_content( $topic, $tone, $audience, $instructions, $category_id = 0 ) {
-        if ( empty( $this->openai_key ) ) {
-            throw new Exception( 'OpenAI API Key não configurada.' );
-        }
-
         // 1. Memory & Linking Module
-        // Buscamos dados dos últimos 30 posts (reduzido de 50 para economizar tokens/tempo na geração de links)
         $context_data = $this->get_contextual_posts( 30, $category_id );
 
         $memory_string = implode( ', ', $context_data['titles'] );
@@ -62,7 +75,19 @@ class Tenet_Generator {
             \"image_alt_text\": \"Descrição descritiva da imagem em Português para acessibilidade e SEO\"
         }";
 
-        $ai_data = $this->call_openai( $system_prompt, $user_prompt );
+        // Dispatch to the selected provider
+        switch ( $this->ai_provider ) {
+            case 'gemini':
+                $ai_data = $this->call_gemini( $system_prompt, $user_prompt );
+                break;
+            case 'openrouter':
+                $ai_data = $this->call_openrouter( $system_prompt, $user_prompt );
+                break;
+            case 'openai':
+            default:
+                $ai_data = $this->call_openai( $system_prompt, $user_prompt );
+                break;
+        }
 
         // 3. Visual Module & Publication
         $image_id = 0;
@@ -82,10 +107,7 @@ class Tenet_Generator {
     private function get_contextual_posts( $limit, $category_id = 0 ) {
         global $wpdb;
 
-        // Otimização: Buscamos ID e Título juntos para evitar queries extras para o título.
-        // Respeita a lição do "ID-only Trap" do bolt.md
         if ( $category_id > 0 ) {
-            // Silos de Conteúdo: Filtra por categoria para fortalecer relevância tópica
             $results = $wpdb->get_results( $wpdb->prepare( "
                 SELECT p.ID, p.post_title
                 FROM {$wpdb->posts} p
@@ -99,7 +121,6 @@ class Tenet_Generator {
                 LIMIT %d
             ", $category_id, $limit ) );
         } else {
-            // Busca Global se não houver categoria definida
             $results = $wpdb->get_results( $wpdb->prepare( "
                 SELECT ID, post_title
                 FROM {$wpdb->posts}
@@ -114,11 +135,7 @@ class Tenet_Generator {
         $links = array();
 
         foreach ( $results as $post ) {
-            // Lista apenas de títulos para a "Memória" (evitar repetição)
             $titles[] = $post->post_title;
-
-            // Lista formatada para "Internal Linking"
-            // Formato: "- Título do Post: URL"
             $permalink = get_permalink( $post->ID );
             if ( $permalink ) {
                 $links[] = "- {$post->post_title}: {$permalink}";
@@ -131,11 +148,34 @@ class Tenet_Generator {
         );
     }
 
+    private function clean_and_decode_json( $json_string ) {
+        // Find JSON boundaries
+        $start = strpos( $json_string, '{' );
+        $end = strrpos( $json_string, '}' );
+
+        if ( $start !== false && $end !== false ) {
+            $json_string = substr( $json_string, $start, ( $end - $start ) + 1 );
+        }
+
+        $data = json_decode( $json_string, true );
+
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+             error_log( 'Tenet JSON Decode Error. Received: ' . $json_string );
+             throw new Exception( 'Falha ao decodificar JSON da IA.' );
+        }
+
+        return $data;
+    }
+
     private function call_openai( $system_prompt, $user_prompt ) {
+        if ( empty( $this->openai_key ) ) {
+            throw new Exception( 'OpenAI API Key não configurada.' );
+        }
+
         $url = 'https://api.openai.com/v1/chat/completions';
 
         $body = array(
-            'model' => 'gpt-4o',
+            'model' => $this->openai_model,
             'messages' => array(
                 array( 'role' => 'system', 'content' => $system_prompt ),
                 array( 'role' => 'user', 'content' => $user_prompt ),
@@ -167,26 +207,117 @@ class Tenet_Generator {
 
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body, true );
-
         $content_json_str = $data['choices'][0]['message']['content'];
 
-        // Clean JSON string (remove markdown blocks or extra text)
-        $start = strpos( $content_json_str, '{' );
-        $end = strrpos( $content_json_str, '}' );
+        return $this->clean_and_decode_json( $content_json_str );
+    }
 
-        if ( $start !== false && $end !== false ) {
-            $content_json_str = substr( $content_json_str, $start, ( $end - $start ) + 1 );
+    private function call_gemini( $system_prompt, $user_prompt ) {
+        if ( empty( $this->gemini_key ) ) {
+            throw new Exception( 'Gemini API Key não configurada.' );
         }
 
-        $content_data = json_decode( $content_json_str, true );
+        // Gemini REST API URL
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $this->gemini_model . ':generateContent?key=' . $this->gemini_key;
 
-        if ( json_last_error() !== JSON_ERROR_NONE ) {
-             // Log the problematic string for debugging
-             error_log( 'Tenet JSON Decode Error. Received: ' . $content_json_str );
-             throw new Exception( 'Falha ao decodificar JSON da IA.' );
+        // Combine system and user prompt because Gemini structure can be complex,
+        // but passing system prompt as text first usually works well.
+        $final_prompt = "INSTRUÇÕES DO SISTEMA:\n$system_prompt\n\nTAREFA DO USUÁRIO:\n$user_prompt";
+
+        $body = array(
+            'contents' => array(
+                array(
+                    'parts' => array(
+                        array( 'text' => $final_prompt )
+                    )
+                )
+            ),
+            // Request JSON response if supported by the model
+            'generationConfig' => array(
+                'response_mime_type' => 'application/json'
+            )
+        );
+
+        $args = array(
+            'body'        => json_encode( $body ),
+            'headers'     => array(
+                'Content-Type'  => 'application/json',
+            ),
+            'timeout'     => 60,
+        );
+
+        $response = wp_remote_post( $url, $args );
+
+        if ( is_wp_error( $response ) ) {
+            throw new Exception( 'Erro no Gemini: ' . $response->get_error_message() );
         }
 
-        return $content_data;
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            $body_err = wp_remote_retrieve_body( $response );
+            throw new Exception( 'Erro Gemini (' . $code . '): ' . $body_err );
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( empty( $data['candidates'][0]['content']['parts'][0]['text'] ) ) {
+            throw new Exception( 'Resposta vazia do Gemini.' );
+        }
+
+        $content_json_str = $data['candidates'][0]['content']['parts'][0]['text'];
+
+        return $this->clean_and_decode_json( $content_json_str );
+    }
+
+    private function call_openrouter( $system_prompt, $user_prompt ) {
+        if ( empty( $this->openrouter_key ) ) {
+            throw new Exception( 'OpenRouter API Key não configurada.' );
+        }
+
+        $url = 'https://openrouter.ai/api/v1/chat/completions';
+
+        $body = array(
+            'model' => $this->openrouter_model,
+            'messages' => array(
+                array( 'role' => 'system', 'content' => $system_prompt ),
+                array( 'role' => 'user', 'content' => $user_prompt ),
+            ),
+            'response_format' => array( 'type' => 'json_object' ), // Best effort support
+            'temperature' => 0.7,
+        );
+
+        $site_url = get_site_url();
+        $site_name = get_bloginfo( 'name' );
+
+        $args = array(
+            'body'        => json_encode( $body ),
+            'headers'     => array(
+                'Authorization' => 'Bearer ' . $this->openrouter_key,
+                'Content-Type'  => 'application/json',
+                'HTTP-Referer'  => $site_url,
+                'X-Title'       => $site_name,
+            ),
+            'timeout'     => 60,
+        );
+
+        $response = wp_remote_post( $url, $args );
+
+        if ( is_wp_error( $response ) ) {
+            throw new Exception( 'Erro no OpenRouter: ' . $response->get_error_message() );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            $body_err = wp_remote_retrieve_body( $response );
+            throw new Exception( 'Erro OpenRouter (' . $code . '): ' . $body_err );
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+        $content_json_str = $data['choices'][0]['message']['content'];
+
+        return $this->clean_and_decode_json( $content_json_str );
     }
 
     private function handle_image_download( $query, $alt_text = '' ) {

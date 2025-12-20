@@ -35,9 +35,23 @@ class Tenet_Admin {
     }
 
     public function register_settings() {
-        register_setting( 'tenet_settings_group', 'tenet_openai_key' );
-        register_setting( 'tenet_settings_group', 'tenet_pixabay_key' );
         register_setting( 'tenet_settings_group', 'tenet_post_status' );
+        register_setting( 'tenet_settings_group', 'tenet_pixabay_key' );
+
+        // AI Provider Settings
+        register_setting( 'tenet_settings_group', 'tenet_ai_provider', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+
+        // OpenAI
+        register_setting( 'tenet_settings_group', 'tenet_openai_key' );
+        register_setting( 'tenet_settings_group', 'tenet_openai_model', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+
+        // Gemini
+        register_setting( 'tenet_settings_group', 'tenet_gemini_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+        register_setting( 'tenet_settings_group', 'tenet_gemini_model', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+
+        // OpenRouter
+        register_setting( 'tenet_settings_group', 'tenet_openrouter_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+        register_setting( 'tenet_settings_group', 'tenet_openrouter_model', array( 'sanitize_callback' => 'sanitize_text_field' ) );
 
         // Default content settings with sanitization
         register_setting( 'tenet_settings_group', 'tenet_default_tone', array( 'sanitize_callback' => 'sanitize_text_field' ) );
@@ -54,10 +68,7 @@ class Tenet_Admin {
                 <?php settings_fields( 'tenet_settings_group' ); ?>
                 <?php do_settings_sections( 'tenet_settings_group' ); ?>
                 <table class="form-table">
-                    <tr valign="top">
-                        <th scope="row">OpenAI API Key</th>
-                        <td><input type="password" name="tenet_openai_key" value="<?php echo esc_attr( get_option('tenet_openai_key') ); ?>" class="regular-text" /></td>
-                    </tr>
+                    <!-- General Settings -->
                     <tr valign="top">
                         <th scope="row">Pixabay API Key</th>
                         <td><input type="password" name="tenet_pixabay_key" value="<?php echo esc_attr( get_option('tenet_pixabay_key') ); ?>" class="regular-text" /></td>
@@ -71,15 +82,59 @@ class Tenet_Admin {
                             </select>
                         </td>
                     </tr>
+
+                    <!-- AI Providers -->
+                    <tr><td colspan="2"><hr><h2>Provedor de IA</h2></td></tr>
+                    <tr valign="top">
+                        <th scope="row">Provedor Ativo</th>
+                        <td>
+                            <select name="tenet_ai_provider">
+                                <option value="openai" <?php selected( get_option('tenet_ai_provider'), 'openai' ); ?>>OpenAI</option>
+                                <option value="gemini" <?php selected( get_option('tenet_ai_provider'), 'gemini' ); ?>>Google Gemini</option>
+                                <option value="openrouter" <?php selected( get_option('tenet_ai_provider'), 'openrouter' ); ?>>OpenRouter</option>
+                            </select>
+                        </td>
+                    </tr>
+
+                    <!-- OpenAI Settings -->
+                    <tr><td colspan="2"><h3>OpenAI</h3></td></tr>
+                    <tr valign="top">
+                        <th scope="row">OpenAI API Key</th>
+                        <td><input type="password" name="tenet_openai_key" value="<?php echo esc_attr( get_option('tenet_openai_key') ); ?>" class="regular-text" /></td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Modelo OpenAI</th>
+                        <td><input type="text" name="tenet_openai_model" value="<?php echo esc_attr( get_option('tenet_openai_model', 'gpt-4o') ); ?>" class="regular-text" placeholder="Ex: gpt-4o" /></td>
+                    </tr>
+
+                    <!-- Gemini Settings -->
+                    <tr><td colspan="2"><h3>Google Gemini</h3></td></tr>
+                    <tr valign="top">
+                        <th scope="row">Gemini API Key</th>
+                        <td><input type="password" name="tenet_gemini_key" value="<?php echo esc_attr( get_option('tenet_gemini_key') ); ?>" class="regular-text" /></td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Modelo Gemini</th>
+                        <td><input type="text" name="tenet_gemini_model" value="<?php echo esc_attr( get_option('tenet_gemini_model', 'gemini-1.5-pro') ); ?>" class="regular-text" placeholder="Ex: gemini-1.5-pro" /></td>
+                    </tr>
+
+                    <!-- OpenRouter Settings -->
+                    <tr><td colspan="2"><h3>OpenRouter</h3></td></tr>
+                    <tr valign="top">
+                        <th scope="row">OpenRouter API Key</th>
+                        <td><input type="password" name="tenet_openrouter_key" value="<?php echo esc_attr( get_option('tenet_openrouter_key') ); ?>" class="regular-text" /></td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Modelo OpenRouter</th>
+                        <td><input type="text" name="tenet_openrouter_model" value="<?php echo esc_attr( get_option('tenet_openrouter_model') ); ?>" class="regular-text" placeholder="Ex: anthropic/claude-3-opus" /></td>
+                    </tr>
+
+                    <!-- Default Content Settings -->
+                    <tr><td colspan="2"><hr><h2>Padrões de Conteúdo</h2></td></tr>
                     <tr valign="top">
                         <th scope="row">Tom de Voz Padrão</th>
                         <td>
-                            <select name="tenet_default_tone">
-                                <option value="Técnico" <?php selected( get_option('tenet_default_tone'), 'Técnico' ); ?>>Técnico</option>
-                                <option value="Humorístico" <?php selected( get_option('tenet_default_tone'), 'Humorístico' ); ?>>Humorístico</option>
-                                <option value="Jornalístico" <?php selected( get_option('tenet_default_tone'), 'Jornalístico' ); ?>>Jornalístico</option>
-                                <option value="Acadêmico" <?php selected( get_option('tenet_default_tone'), 'Acadêmico' ); ?>>Acadêmico</option>
-                            </select>
+                            <input type="text" name="tenet_default_tone" value="<?php echo esc_attr( get_option('tenet_default_tone', 'Técnico') ); ?>" class="regular-text" placeholder="Ex: Sarcástico e ácido" />
                         </td>
                     </tr>
                     <tr valign="top">
@@ -143,12 +198,7 @@ class Tenet_Admin {
                         <th scope="row"><label for="tone">Tom de Voz</label></th>
                         <td>
                             <?php $default_tone = get_option('tenet_default_tone', 'Técnico'); ?>
-                            <select name="tone" id="tone">
-                                <option value="Técnico" <?php selected( $default_tone, 'Técnico' ); ?>>Técnico</option>
-                                <option value="Humorístico" <?php selected( $default_tone, 'Humorístico' ); ?>>Humorístico</option>
-                                <option value="Jornalístico" <?php selected( $default_tone, 'Jornalístico' ); ?>>Jornalístico</option>
-                                <option value="Acadêmico" <?php selected( $default_tone, 'Acadêmico' ); ?>>Acadêmico</option>
-                            </select>
+                            <input name="tone" type="text" id="tone" class="regular-text" value="<?php echo esc_attr( $default_tone ); ?>" placeholder="Ex: Sarcástico, Poético, Técnico...">
                         </td>
                     </tr>
                     <tr>
