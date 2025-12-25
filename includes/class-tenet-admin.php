@@ -182,7 +182,7 @@ class Tenet_Admin {
             $args = array( $topic, $tone, $audience, $instructions, $category_id );
 
             if ( wp_schedule_single_event( time(), 'tenet_async_generation_event', $args ) ) {
-                 $message = '<div class="notice notice-success is-dismissible"><p>Geração de conteúdo agendada! O processo iniciou em segundo plano e pode levar alguns minutos. Verifique a lista de posts em breve.</p></div>';
+                 $message = '<div class="notice notice-success is-dismissible"><p>Geração de conteúdo agendada! O processo iniciou em segundo plano e pode levar alguns minutos. Atualize esta página em breve para ver o novo post na lista abaixo.</p></div>';
 
                  // Spawn cron immediately to avoid waiting for next page load
                  spawn_cron();
@@ -240,6 +240,7 @@ class Tenet_Admin {
             <hr>
 
             <h2>Últimos Posts Gerados</h2>
+            <p><a href="<?php echo esc_url( menu_page_url( 'tenet', false ) ); ?>" class="button">Atualizar Lista</a></p>
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
@@ -255,7 +256,7 @@ class Tenet_Admin {
                         'post_type'   => 'post',
                         'post_status' => 'any',
                         'meta_key'    => '_tenet_generated',
-                        'meta_value'  => 1,
+                        'meta_value'  => '1',
                         'posts_per_page' => 5,
                         'orderby'     => 'date',
                         'order'       => 'DESC'
@@ -267,11 +268,14 @@ class Tenet_Admin {
                             $query->the_post();
                             $post_id = get_the_ID();
                             $edit_link = get_edit_post_link( $post_id );
+                            $status = get_post_status();
+                            $status_obj = get_post_status_object( $status );
+                            $status_label = $status_obj ? $status_obj->label : ucfirst( $status );
                             ?>
                             <tr>
                                 <td><strong><?php the_title(); ?></strong></td>
                                 <td><?php echo get_the_date( 'd/m/Y H:i' ); ?></td>
-                                <td><?php echo get_post_status_object( get_post_status() )->label; ?></td>
+                                <td><?php echo esc_html( $status_label ); ?></td>
                                 <td>
                                     <?php if ( $edit_link ) : ?>
                                         <a href="<?php echo esc_url( $edit_link ); ?>" class="button button-small button-secondary" target="_blank">Editar</a>
