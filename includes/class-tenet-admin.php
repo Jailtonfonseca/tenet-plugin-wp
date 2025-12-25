@@ -10,10 +10,57 @@ class Tenet_Admin {
 
     public function init() {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
-        add_action( 'admin_init', array( $this, 'register_settings' ) );
+        add_action( 'admin_init', array( $this, 'migrate_settings' ) );
 
-        // Register Async Generation Hook
-        add_action( 'tenet_async_generation_event', array( $this->generator, 'generate_content' ), 10, 5 );
+        // Register Async Generation Hook - Updated to 6 arguments to include profile_id
+        add_action( 'tenet_async_generation_event', array( $this->generator, 'generate_content' ), 10, 6 );
+    }
+
+    public function migrate_settings() {
+        // If profiles already exist, do nothing
+        if ( get_option( 'tenet_profiles' ) !== false ) {
+            return;
+        }
+
+        // Check if we have legacy settings to migrate
+        $legacy_provider = get_option( 'tenet_ai_provider' );
+
+        // If no legacy provider is set, it might be a fresh install.
+        // We initialize an empty profiles array or a default empty profile.
+        // Let's create a Default profile regardless to provide a good starting point.
+
+        $default_settings = array(
+            'tenet_post_status'      => get_option( 'tenet_post_status', 'draft' ),
+            'tenet_pixabay_key'      => get_option( 'tenet_pixabay_key', '' ),
+            'tenet_ai_provider'      => get_option( 'tenet_ai_provider', 'openai' ),
+
+            'tenet_openai_key'       => get_option( 'tenet_openai_key', '' ),
+            'tenet_openai_model'     => get_option( 'tenet_openai_model', 'gpt-4o' ),
+
+            'tenet_gemini_key'       => get_option( 'tenet_gemini_key', '' ),
+            'tenet_gemini_model'     => get_option( 'tenet_gemini_model', 'gemini-1.5-pro' ),
+
+            'tenet_openrouter_key'   => get_option( 'tenet_openrouter_key', '' ),
+            'tenet_openrouter_model' => get_option( 'tenet_openrouter_model', '' ),
+
+            'tenet_default_tone'         => get_option( 'tenet_default_tone', 'Técnico' ),
+            'tenet_default_audience'     => get_option( 'tenet_default_audience', '' ),
+            'tenet_default_category'     => get_option( 'tenet_default_category', 0 ),
+            'tenet_default_instructions' => get_option( 'tenet_default_instructions', '' ),
+        );
+
+        $profiles = array(
+            1 => array(
+                'id'       => 1,
+                'name'     => 'Padrão (Importado)',
+                'settings' => $default_settings
+            )
+        );
+
+        update_option( 'tenet_profiles', $profiles );
+
+        // We do NOT delete legacy options to ensure safety and backward compatibility
+        // for any running processes or if the user reverts the plugin.
     }
 
     public function add_admin_menu() {
@@ -29,7 +76,7 @@ class Tenet_Admin {
 
         add_submenu_page(
             'tenet',
-            'Configurações',
+            'Perfis de Configuração',
             'Configurações',
             'manage_options',
             'tenet-settings',
@@ -37,166 +84,335 @@ class Tenet_Admin {
         );
     }
 
-    public function register_settings() {
-        register_setting( 'tenet_settings_group', 'tenet_post_status' );
-        register_setting( 'tenet_settings_group', 'tenet_pixabay_key' );
+    private function get_profiles() {
+        return get_option( 'tenet_profiles', array() );
+    }
 
-        // AI Provider Settings
-        register_setting( 'tenet_settings_group', 'tenet_ai_provider', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+    private function get_profile( $id ) {
+        $profiles = $this->get_profiles();
+        return isset( $profiles[ $id ] ) ? $profiles[ $id ] : null;
+    }
 
-        // OpenAI
-        register_setting( 'tenet_settings_group', 'tenet_openai_key' );
-        register_setting( 'tenet_settings_group', 'tenet_openai_model', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+    private function save_profile( $id, $name, $settings ) {
+        $profiles = $this->get_profiles();
 
-        // Gemini
-        register_setting( 'tenet_settings_group', 'tenet_gemini_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
-        register_setting( 'tenet_settings_group', 'tenet_gemini_model', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+        // Generate ID if new
+        if ( empty( $id ) ) {
+            $id = empty( $profiles ) ? 1 : max( array_keys( $profiles ) ) + 1;
+        }
 
-        // OpenRouter
-        register_setting( 'tenet_settings_group', 'tenet_openrouter_key', array( 'sanitize_callback' => 'sanitize_text_field' ) );
-        register_setting( 'tenet_settings_group', 'tenet_openrouter_model', array( 'sanitize_callback' => 'sanitize_text_field' ) );
+        // Sanitize Settings
+        $clean_settings = array(
+            'tenet_post_status'      => sanitize_text_field( $settings['tenet_post_status'] ),
+            'tenet_pixabay_key'      => sanitize_text_field( $settings['tenet_pixabay_key'] ),
+            'tenet_ai_provider'      => sanitize_text_field( $settings['tenet_ai_provider'] ),
 
-        // Default content settings with sanitization
-        register_setting( 'tenet_settings_group', 'tenet_default_tone', array( 'sanitize_callback' => 'sanitize_text_field' ) );
-        register_setting( 'tenet_settings_group', 'tenet_default_audience', array( 'sanitize_callback' => 'sanitize_text_field' ) );
-        register_setting( 'tenet_settings_group', 'tenet_default_instructions', array( 'sanitize_callback' => 'sanitize_textarea_field' ) );
-        register_setting( 'tenet_settings_group', 'tenet_default_category', array( 'sanitize_callback' => 'absint' ) );
+            'tenet_openai_key'       => sanitize_text_field( $settings['tenet_openai_key'] ),
+            'tenet_openai_model'     => sanitize_text_field( $settings['tenet_openai_model'] ),
+
+            'tenet_gemini_key'       => sanitize_text_field( $settings['tenet_gemini_key'] ),
+            'tenet_gemini_model'     => sanitize_text_field( $settings['tenet_gemini_model'] ),
+
+            'tenet_openrouter_key'   => sanitize_text_field( $settings['tenet_openrouter_key'] ),
+            'tenet_openrouter_model' => sanitize_text_field( $settings['tenet_openrouter_model'] ),
+
+            'tenet_default_tone'         => sanitize_text_field( $settings['tenet_default_tone'] ),
+            'tenet_default_audience'     => sanitize_text_field( $settings['tenet_default_audience'] ),
+            'tenet_default_category'     => absint( $settings['tenet_default_category'] ),
+            'tenet_default_instructions' => sanitize_textarea_field( $settings['tenet_default_instructions'] ),
+        );
+
+        $profiles[ $id ] = array(
+            'id'       => $id,
+            'name'     => sanitize_text_field( $name ),
+            'settings' => $clean_settings
+        );
+
+        update_option( 'tenet_profiles', $profiles );
+        return $id;
+    }
+
+    private function delete_profile( $id ) {
+        $profiles = $this->get_profiles();
+        if ( isset( $profiles[ $id ] ) ) {
+            unset( $profiles[ $id ] );
+            update_option( 'tenet_profiles', $profiles );
+        }
     }
 
     public function render_settings_page() {
+        $action = isset( $_GET['action'] ) ? $_GET['action'] : 'list';
+        $message = '';
+
+        // Handle POST actions
+        if ( $_SERVER['REQUEST_METHOD'] === 'POST' && check_admin_referer( 'tenet_save_profile', 'tenet_nonce' ) ) {
+            if ( isset( $_POST['tenet_action'] ) && $_POST['tenet_action'] === 'save' ) {
+                $id = isset( $_POST['profile_id'] ) ? intval( $_POST['profile_id'] ) : 0;
+                $name = isset( $_POST['profile_name'] ) ? $_POST['profile_name'] : 'Novo Perfil';
+                $settings = $_POST; // We sanitize inside save_profile
+
+                $this->save_profile( $id, $name, $settings );
+                $message = '<div class="notice notice-success is-dismissible"><p>Perfil salvo com sucesso.</p></div>';
+                $action = 'list'; // Redirect to list view
+            }
+        }
+
+        // Handle Delete via GET
+        if ( $action === 'delete' && isset( $_GET['id'] ) && check_admin_referer( 'tenet_delete_profile' ) ) {
+            $this->delete_profile( intval( $_GET['id'] ) );
+            $message = '<div class="notice notice-success is-dismissible"><p>Perfil excluído.</p></div>';
+            $action = 'list';
+        }
+
+        echo '<div class="wrap"><h1>Configurações do Tenet (Perfis)</h1>' . $message;
+
+        if ( $action == 'edit' || $action == 'new' ) {
+            $this->render_profile_form();
+        } else {
+            $this->render_profile_list();
+        }
+
+        echo '</div>';
+    }
+
+    private function render_profile_list() {
+        $profiles = $this->get_profiles();
         ?>
-        <div class="wrap">
-            <h1>Configurações do Tenet</h1>
-            <form method="post" action="options.php">
-                <?php settings_fields( 'tenet_settings_group' ); ?>
-                <?php do_settings_sections( 'tenet_settings_group' ); ?>
-                <table class="form-table">
-                    <!-- General Settings -->
-                    <tr valign="top">
-                        <th scope="row">Pixabay API Key</th>
-                        <td><input type="password" name="tenet_pixabay_key" value="<?php echo esc_attr( get_option('tenet_pixabay_key') ); ?>" class="regular-text" /></td>
-                    </tr>
-                    <tr valign="top">
-                        <th scope="row">Status Padrão do Post</th>
-                        <td>
-                            <select name="tenet_post_status">
-                                <option value="draft" <?php selected( get_option('tenet_post_status'), 'draft' ); ?>>Rascunho</option>
-                                <option value="publish" <?php selected( get_option('tenet_post_status'), 'publish' ); ?>>Publicado</option>
-                            </select>
-                        </td>
-                    </tr>
+        <p>Gerencie seus perfis de configuração. Você pode criar perfis diferentes para nichos, idiomas ou estilos diferentes.</p>
+        <p><a href="<?php echo admin_url( 'admin.php?page=tenet-settings&action=new' ); ?>" class="button button-primary">Adicionar Novo Perfil</a></p>
 
-                    <!-- AI Providers -->
-                    <tr><td colspan="2"><hr><h2>Provedor de IA</h2></td></tr>
-                    <tr valign="top">
-                        <th scope="row">Provedor Ativo</th>
-                        <td>
-                            <select name="tenet_ai_provider">
-                                <option value="openai" <?php selected( get_option('tenet_ai_provider'), 'openai' ); ?>>OpenAI</option>
-                                <option value="gemini" <?php selected( get_option('tenet_ai_provider'), 'gemini' ); ?>>Google Gemini</option>
-                                <option value="openrouter" <?php selected( get_option('tenet_ai_provider'), 'openrouter' ); ?>>OpenRouter</option>
-                            </select>
-                        </td>
-                    </tr>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>Nome do Perfil</th>
+                    <th>Provedor de IA</th>
+                    <th>Status do Post</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ( empty( $profiles ) ) : ?>
+                    <tr><td colspan="4">Nenhum perfil encontrado. Crie um novo.</td></tr>
+                <?php else : ?>
+                    <?php foreach ( $profiles as $profile ) :
+                        $edit_url = admin_url( 'admin.php?page=tenet-settings&action=edit&id=' . $profile['id'] );
+                        $delete_url = wp_nonce_url( admin_url( 'admin.php?page=tenet-settings&action=delete&id=' . $profile['id'] ), 'tenet_delete_profile' );
+                        ?>
+                        <tr>
+                            <td><strong><?php echo esc_html( $profile['name'] ); ?></strong></td>
+                            <td><?php echo esc_html( strtoupper( $profile['settings']['tenet_ai_provider'] ) ); ?></td>
+                            <td><?php echo esc_html( ucfirst( $profile['settings']['tenet_post_status'] ) ); ?></td>
+                            <td>
+                                <a href="<?php echo $edit_url; ?>" class="button button-small">Editar</a>
+                                <a href="<?php echo $delete_url; ?>" class="button button-small button-link-delete" onclick="return confirm('Tem certeza que deseja excluir este perfil?');">Excluir</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+        <?php
+    }
 
-                    <!-- OpenAI Settings -->
-                    <tr><td colspan="2"><h3>OpenAI</h3></td></tr>
-                    <tr valign="top">
-                        <th scope="row">OpenAI API Key</th>
-                        <td><input type="password" name="tenet_openai_key" value="<?php echo esc_attr( get_option('tenet_openai_key') ); ?>" class="regular-text" /></td>
-                    </tr>
-                    <tr valign="top">
-                        <th scope="row">Modelo OpenAI</th>
-                        <td><input type="text" name="tenet_openai_model" value="<?php echo esc_attr( get_option('tenet_openai_model', 'gpt-4o') ); ?>" class="regular-text" placeholder="Ex: gpt-4o" /></td>
-                    </tr>
+    private function render_profile_form() {
+        $id = isset( $_GET['id'] ) ? intval( $_GET['id'] ) : 0;
+        $profile = $this->get_profile( $id );
+        $settings = $profile ? $profile['settings'] : array();
 
-                    <!-- Gemini Settings -->
-                    <tr><td colspan="2"><h3>Google Gemini</h3></td></tr>
-                    <tr valign="top">
-                        <th scope="row">Gemini API Key</th>
-                        <td><input type="password" name="tenet_gemini_key" value="<?php echo esc_attr( get_option('tenet_gemini_key') ); ?>" class="regular-text" /></td>
-                    </tr>
-                    <tr valign="top">
-                        <th scope="row">Modelo Gemini</th>
-                        <td><input type="text" name="tenet_gemini_model" value="<?php echo esc_attr( get_option('tenet_gemini_model', 'gemini-1.5-pro') ); ?>" class="regular-text" placeholder="Ex: gemini-1.5-pro" /></td>
-                    </tr>
+        // Helper to get value safely
+        $val = function( $key, $default = '' ) use ( $settings ) {
+            return isset( $settings[$key] ) ? $settings[$key] : $default;
+        };
+        ?>
+        <form method="post" action="">
+            <?php wp_nonce_field( 'tenet_save_profile', 'tenet_nonce' ); ?>
+            <input type="hidden" name="tenet_action" value="save">
+            <input type="hidden" name="profile_id" value="<?php echo esc_attr( $id ); ?>">
 
-                    <!-- OpenRouter Settings -->
-                    <tr><td colspan="2"><h3>OpenRouter</h3></td></tr>
-                    <tr valign="top">
-                        <th scope="row">OpenRouter API Key</th>
-                        <td><input type="password" name="tenet_openrouter_key" value="<?php echo esc_attr( get_option('tenet_openrouter_key') ); ?>" class="regular-text" /></td>
-                    </tr>
-                    <tr valign="top">
-                        <th scope="row">Modelo OpenRouter</th>
-                        <td><input type="text" name="tenet_openrouter_model" value="<?php echo esc_attr( get_option('tenet_openrouter_model') ); ?>" class="regular-text" placeholder="Ex: anthropic/claude-3-opus" /></td>
-                    </tr>
+            <p><a href="<?php echo admin_url( 'admin.php?page=tenet-settings' ); ?>">&larr; Voltar para a lista</a></p>
 
-                    <!-- Default Content Settings -->
-                    <tr><td colspan="2"><hr><h2>Padrões de Conteúdo</h2></td></tr>
-                    <tr valign="top">
-                        <th scope="row">Tom de Voz Padrão</th>
-                        <td>
-                            <input type="text" name="tenet_default_tone" value="<?php echo esc_attr( get_option('tenet_default_tone', 'Técnico') ); ?>" class="regular-text" placeholder="Ex: Sarcástico e ácido" />
-                        </td>
-                    </tr>
-                    <tr valign="top">
-                        <th scope="row">Público Alvo Padrão</th>
-                        <td><input type="text" name="tenet_default_audience" value="<?php echo esc_attr( get_option('tenet_default_audience') ); ?>" class="regular-text" /></td>
-                    </tr>
-                    <tr valign="top">
-                        <th scope="row">Categoria Padrão</th>
-                        <td>
-                            <?php
-                            wp_dropdown_categories( array(
-                                'name'              => 'tenet_default_category',
-                                'show_option_none'  => 'Sem Categoria',
-                                'option_none_value' => '0',
-                                'hide_empty'        => 0,
-                                'selected'          => get_option('tenet_default_category', 0),
-                            ) );
-                            ?>
-                        </td>
-                    </tr>
-                    <tr valign="top">
-                        <th scope="row">Instruções Extras Padrão</th>
-                        <td><textarea name="tenet_default_instructions" rows="5" class="large-text"><?php echo esc_textarea( get_option('tenet_default_instructions') ); ?></textarea></td>
-                    </tr>
-                </table>
-                <?php submit_button(); ?>
-            </form>
-        </div>
+            <table class="form-table">
+                <tr valign="top">
+                    <th scope="row">Nome do Perfil</th>
+                    <td><input type="text" name="profile_name" value="<?php echo esc_attr( $profile ? $profile['name'] : '' ); ?>" class="regular-text" required placeholder="Ex: Tech Blog" /></td>
+                </tr>
+            </table>
+
+            <hr>
+
+            <table class="form-table">
+                <!-- General Settings -->
+                <tr valign="top">
+                    <th scope="row">Pixabay API Key</th>
+                    <td><input type="password" name="tenet_pixabay_key" value="<?php echo esc_attr( $val('tenet_pixabay_key') ); ?>" class="regular-text" /></td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Status Padrão do Post</th>
+                    <td>
+                        <select name="tenet_post_status">
+                            <option value="draft" <?php selected( $val('tenet_post_status'), 'draft' ); ?>>Rascunho</option>
+                            <option value="publish" <?php selected( $val('tenet_post_status'), 'publish' ); ?>>Publicado</option>
+                        </select>
+                    </td>
+                </tr>
+
+                <!-- AI Providers -->
+                <tr><td colspan="2"><hr><h2>Provedor de IA</h2></td></tr>
+                <tr valign="top">
+                    <th scope="row">Provedor Ativo</th>
+                    <td>
+                        <select name="tenet_ai_provider">
+                            <option value="openai" <?php selected( $val('tenet_ai_provider'), 'openai' ); ?>>OpenAI</option>
+                            <option value="gemini" <?php selected( $val('tenet_ai_provider'), 'gemini' ); ?>>Google Gemini</option>
+                            <option value="openrouter" <?php selected( $val('tenet_ai_provider'), 'openrouter' ); ?>>OpenRouter</option>
+                        </select>
+                    </td>
+                </tr>
+
+                <!-- OpenAI Settings -->
+                <tr><td colspan="2"><h3>OpenAI</h3></td></tr>
+                <tr valign="top">
+                    <th scope="row">OpenAI API Key</th>
+                    <td><input type="password" name="tenet_openai_key" value="<?php echo esc_attr( $val('tenet_openai_key') ); ?>" class="regular-text" /></td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Modelo OpenAI</th>
+                    <td><input type="text" name="tenet_openai_model" value="<?php echo esc_attr( $val('tenet_openai_model', 'gpt-4o') ); ?>" class="regular-text" placeholder="Ex: gpt-4o" /></td>
+                </tr>
+
+                <!-- Gemini Settings -->
+                <tr><td colspan="2"><h3>Google Gemini</h3></td></tr>
+                <tr valign="top">
+                    <th scope="row">Gemini API Key</th>
+                    <td><input type="password" name="tenet_gemini_key" value="<?php echo esc_attr( $val('tenet_gemini_key') ); ?>" class="regular-text" /></td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Modelo Gemini</th>
+                    <td><input type="text" name="tenet_gemini_model" value="<?php echo esc_attr( $val('tenet_gemini_model', 'gemini-1.5-pro') ); ?>" class="regular-text" placeholder="Ex: gemini-1.5-pro" /></td>
+                </tr>
+
+                <!-- OpenRouter Settings -->
+                <tr><td colspan="2"><h3>OpenRouter</h3></td></tr>
+                <tr valign="top">
+                    <th scope="row">OpenRouter API Key</th>
+                    <td><input type="password" name="tenet_openrouter_key" value="<?php echo esc_attr( $val('tenet_openrouter_key') ); ?>" class="regular-text" /></td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Modelo OpenRouter</th>
+                    <td><input type="text" name="tenet_openrouter_model" value="<?php echo esc_attr( $val('tenet_openrouter_model') ); ?>" class="regular-text" placeholder="Ex: anthropic/claude-3-opus" /></td>
+                </tr>
+
+                <!-- Default Content Settings -->
+                <tr><td colspan="2"><hr><h2>Padrões de Conteúdo</h2></td></tr>
+                <tr valign="top">
+                    <th scope="row">Tom de Voz Padrão</th>
+                    <td>
+                        <input type="text" name="tenet_default_tone" value="<?php echo esc_attr( $val('tenet_default_tone', 'Técnico') ); ?>" class="regular-text" placeholder="Ex: Sarcástico e ácido" />
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Público Alvo Padrão</th>
+                    <td><input type="text" name="tenet_default_audience" value="<?php echo esc_attr( $val('tenet_default_audience') ); ?>" class="regular-text" /></td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Categoria Padrão</th>
+                    <td>
+                        <?php
+                        wp_dropdown_categories( array(
+                            'name'              => 'tenet_default_category',
+                            'show_option_none'  => 'Sem Categoria',
+                            'option_none_value' => '0',
+                            'hide_empty'        => 0,
+                            'selected'          => $val('tenet_default_category', 0),
+                        ) );
+                        ?>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Instruções Extras Padrão</th>
+                    <td><textarea name="tenet_default_instructions" rows="5" class="large-text"><?php echo esc_textarea( $val('tenet_default_instructions') ); ?></textarea></td>
+                </tr>
+            </table>
+            <?php submit_button('Salvar Perfil'); ?>
+        </form>
         <?php
     }
 
     public function render_generator_page() {
         $message = '';
+        $profiles = $this->get_profiles();
+
         if ( isset( $_POST['tenet_generate'] ) && check_admin_referer( 'tenet_generate_action', 'tenet_nonce' ) ) {
             $topic = sanitize_text_field( $_POST['topic'] );
             $tone = sanitize_text_field( $_POST['tone'] );
             $audience = sanitize_text_field( $_POST['audience'] );
             $instructions = sanitize_textarea_field( $_POST['instructions'] );
             $category_id = isset( $_POST['tenet_category'] ) ? (int) $_POST['tenet_category'] : 0;
+            $profile_id = isset( $_POST['tenet_profile_id'] ) ? (int) $_POST['tenet_profile_id'] : 0;
 
             // Schedule Async Generation
-            $args = array( $topic, $tone, $audience, $instructions, $category_id );
+            $args = array( $topic, $tone, $audience, $instructions, $category_id, $profile_id );
 
             if ( wp_schedule_single_event( time(), 'tenet_async_generation_event', $args ) ) {
-                 $message = '<div class="notice notice-success is-dismissible"><p>Geração de conteúdo agendada! O processo iniciou em segundo plano e pode levar alguns minutos. Atualize esta página em breve para ver o novo post na lista abaixo.</p></div>';
+                 $message = '<div class="notice notice-success is-dismissible"><p>Geração de conteúdo agendada com o perfil selecionado! Atualize em breve.</p></div>';
 
-                 // Spawn cron immediately to avoid waiting for next page load
+                 // Spawn cron immediately
                  spawn_cron();
             } else {
                  $message = '<div class="notice notice-error is-dismissible"><p>Erro ao agendar a tarefa. Verifique o sistema de CRON.</p></div>';
             }
         }
 
+        // Determine selected profile for UI defaults
+        $selected_profile_id = isset( $_POST['tenet_profile_id'] ) ? (int) $_POST['tenet_profile_id'] : 0;
+        // If no post, default to first available
+        if ( ! $selected_profile_id && ! empty( $profiles ) ) {
+            $first_id = array_key_first( $profiles );
+            $selected_profile_id = $first_id;
+        }
+
+        $current_profile_settings = array();
+        if ( isset( $profiles[$selected_profile_id] ) ) {
+            $current_profile_settings = $profiles[$selected_profile_id]['settings'];
+        }
+
+        // Helper for defaults
+        $get_default = function($key, $fallback) use ($current_profile_settings) {
+            return isset($current_profile_settings[$key]) ? $current_profile_settings[$key] : $fallback;
+        };
+
         ?>
         <div class="wrap">
             <h1>Tenet - Gerador de Conteúdo</h1>
             <?php echo $message; ?>
+
             <form method="post" action="">
                 <?php wp_nonce_field( 'tenet_generate_action', 'tenet_nonce' ); ?>
+
+                <div class="card" style="max-width: 100%; margin-top: 20px; padding: 10px;">
+                    <h2>Configuração da Geração</h2>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row"><label for="tenet_profile_id">Perfil de Configuração</label></th>
+                            <td>
+                                <select name="tenet_profile_id" id="tenet_profile_id" onchange="this.form.submit()">
+                                    <!-- Note: auto-submit on change to reload defaults would be nice, but simple JS/No-JS fallback is better.
+                                         For now, we just list them. To make it dynamic without React, we can't easily hot-swap the default values
+                                         in the inputs below without page reload or complex JS.
+                                         Let's just keep it simple. The user selects profile, and overrides inputs if needed.
+                                    -->
+                                    <?php foreach ( $profiles as $p_id => $p_data ) : ?>
+                                        <option value="<?php echo esc_attr( $p_id ); ?>" <?php selected( $selected_profile_id, $p_id ); ?>>
+                                            <?php echo esc_html( $p_data['name'] ); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="description">Selecione qual perfil de chaves de API e persona usar.</p>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
                 <table class="form-table">
                     <tr>
                         <th scope="row"><label for="topic">Tópico Principal</label></th>
@@ -205,13 +421,13 @@ class Tenet_Admin {
                     <tr>
                         <th scope="row"><label for="tone">Tom de Voz</label></th>
                         <td>
-                            <?php $default_tone = get_option('tenet_default_tone', 'Técnico'); ?>
+                            <?php $default_tone = $get_default('tenet_default_tone', 'Técnico'); ?>
                             <input name="tone" type="text" id="tone" class="regular-text" value="<?php echo esc_attr( $default_tone ); ?>" placeholder="Ex: Sarcástico, Poético, Técnico...">
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="audience">Público Alvo</label></th>
-                        <td><input name="audience" type="text" id="audience" class="regular-text" value="<?php echo esc_attr( get_option('tenet_default_audience') ); ?>"></td>
+                        <td><input name="audience" type="text" id="audience" class="regular-text" value="<?php echo esc_attr( $get_default('tenet_default_audience', '') ); ?>"></td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="tenet_category">Categoria</label></th>
@@ -222,14 +438,14 @@ class Tenet_Admin {
                                 'show_option_none'  => 'Sem Categoria (Padrão)',
                                 'option_none_value' => '0',
                                 'hide_empty'        => 0,
-                                'selected'          => isset( $_POST['tenet_category'] ) ? (int) $_POST['tenet_category'] : get_option('tenet_default_category', 0),
+                                'selected'          => isset( $_POST['tenet_category'] ) ? (int) $_POST['tenet_category'] : $get_default('tenet_default_category', 0),
                             ) );
                             ?>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="instructions">Instruções Extras</label></th>
-                        <td><textarea name="instructions" id="instructions" rows="5" class="large-text"><?php echo esc_textarea( get_option('tenet_default_instructions') ); ?></textarea></td>
+                        <td><textarea name="instructions" id="instructions" rows="5" class="large-text"><?php echo esc_textarea( $get_default('tenet_default_instructions', '') ); ?></textarea></td>
                     </tr>
                 </table>
                 <p class="submit">
