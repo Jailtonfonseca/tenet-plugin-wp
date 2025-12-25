@@ -29,10 +29,6 @@ class Tenet_Generator {
         }
 
         // Helper to get value from profile or fallback to global option (Legacy support)
-        // If a profile IS selected (data is not empty), we prefer its value.
-        // If the value is missing in the profile, we default to '' or specific defaults.
-        // If NO profile is selected (legacy mode), we fall back to get_option().
-
         $use_legacy = empty( $profile_data );
 
         $get_val = function( $key, $default = '' ) use ( $profile_data, $use_legacy ) {
@@ -107,7 +103,7 @@ class Tenet_Generator {
 
         if ( empty( $ai_data ) ) {
             // Consider sending a notification or specialized log here
-            throw new Exception( "Falha na geração após {$max_retries} tentativas. Último erro: " . $last_error );
+            throw new Exception( sprintf( __( 'Falha na geração após %d tentativas. Último erro: %s', 'tenet' ), $max_retries, $last_error ) );
         }
 
         // 3. Visual Module & Publication
@@ -118,7 +114,6 @@ class Tenet_Generator {
                 $image_id = $this->handle_image_download( $ai_data['pixabay_search_query'], $alt_text );
             } catch ( Exception $e ) {
                 // Log error but continue with post creation.
-                // We don't stop the process because text content is valuable.
                 error_log( 'Tenet Pixabay Error: ' . $e->getMessage() );
             }
         }
@@ -241,7 +236,7 @@ class Tenet_Generator {
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
              error_log( 'Tenet JSON Decode Error. Received: ' . $json_string );
-             throw new Exception( 'Falha ao decodificar JSON da IA.' );
+             throw new Exception( __( 'Falha ao decodificar JSON da IA.', 'tenet' ) );
         }
 
         return $data;
@@ -249,7 +244,7 @@ class Tenet_Generator {
 
     private function call_openai( $system_prompt, $user_prompt ) {
         if ( empty( $this->openai_key ) ) {
-            throw new Exception( 'OpenAI API Key não configurada.' );
+            throw new Exception( __( 'OpenAI API Key não configurada.', 'tenet' ) );
         }
 
         $url = 'https://api.openai.com/v1/chat/completions';
@@ -276,13 +271,13 @@ class Tenet_Generator {
         $response = wp_remote_post( $url, $args );
 
         if ( is_wp_error( $response ) ) {
-            throw new Exception( 'Erro na OpenAI: ' . $response->get_error_message() );
+            throw new Exception( __( 'Erro na OpenAI: ', 'tenet' ) . $response->get_error_message() );
         }
 
         $code = wp_remote_retrieve_response_code( $response );
         if ( $code !== 200 ) {
             $body_err = wp_remote_retrieve_body( $response );
-            throw new Exception( 'Erro OpenAI (' . $code . '): ' . $body_err );
+            throw new Exception( sprintf( __( 'Erro OpenAI (%d): %s', 'tenet' ), $code, $body_err ) );
         }
 
         $body = wp_remote_retrieve_body( $response );
@@ -294,7 +289,7 @@ class Tenet_Generator {
 
     private function call_gemini( $system_prompt, $user_prompt ) {
         if ( empty( $this->gemini_key ) ) {
-            throw new Exception( 'Gemini API Key não configurada.' );
+            throw new Exception( __( 'Gemini API Key não configurada.', 'tenet' ) );
         }
 
         // Gemini REST API URL
@@ -326,20 +321,20 @@ class Tenet_Generator {
         $response = wp_remote_post( $url, $args );
 
         if ( is_wp_error( $response ) ) {
-            throw new Exception( 'Erro no Gemini: ' . $response->get_error_message() );
+            throw new Exception( __( 'Erro no Gemini: ', 'tenet' ) . $response->get_error_message() );
         }
 
         $code = wp_remote_retrieve_response_code( $response );
         if ( $code !== 200 ) {
             $body_err = wp_remote_retrieve_body( $response );
-            throw new Exception( 'Erro Gemini (' . $code . '): ' . $body_err );
+            throw new Exception( sprintf( __( 'Erro Gemini (%d): %s', 'tenet' ), $code, $body_err ) );
         }
 
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body, true );
 
         if ( empty( $data['candidates'][0]['content']['parts'][0]['text'] ) ) {
-            throw new Exception( 'Resposta vazia do Gemini.' );
+            throw new Exception( __( 'Resposta vazia do Gemini.', 'tenet' ) );
         }
 
         $content_json_str = $data['candidates'][0]['content']['parts'][0]['text'];
@@ -349,7 +344,7 @@ class Tenet_Generator {
 
     private function call_openrouter( $system_prompt, $user_prompt ) {
         if ( empty( $this->openrouter_key ) ) {
-            throw new Exception( 'OpenRouter API Key não configurada.' );
+            throw new Exception( __( 'OpenRouter API Key não configurada.', 'tenet' ) );
         }
 
         $url = 'https://openrouter.ai/api/v1/chat/completions';
@@ -381,13 +376,13 @@ class Tenet_Generator {
         $response = wp_remote_post( $url, $args );
 
         if ( is_wp_error( $response ) ) {
-            throw new Exception( 'Erro no OpenRouter: ' . $response->get_error_message() );
+            throw new Exception( __( 'Erro no OpenRouter: ', 'tenet' ) . $response->get_error_message() );
         }
 
         $code = wp_remote_retrieve_response_code( $response );
         if ( $code !== 200 ) {
             $body_err = wp_remote_retrieve_body( $response );
-            throw new Exception( 'Erro OpenRouter (' . $code . '): ' . $body_err );
+            throw new Exception( sprintf( __( 'Erro OpenRouter (%d): %s', 'tenet' ), $code, $body_err ) );
         }
 
         $body = wp_remote_retrieve_body( $response );
@@ -402,14 +397,14 @@ class Tenet_Generator {
 
         $response = wp_remote_get( $url );
         if ( is_wp_error( $response ) ) {
-            throw new Exception( 'Erro Pixabay: ' . $response->get_error_message() );
+            throw new Exception( __( 'Erro Pixabay: ', 'tenet' ) . $response->get_error_message() );
         }
 
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body, true );
 
         if ( empty( $data['hits'] ) ) {
-            throw new Exception( 'Nenhuma imagem encontrada no Pixabay.' );
+            throw new Exception( __( 'Nenhuma imagem encontrada no Pixabay.', 'tenet' ) );
         }
 
         // Get highest resolution available or largeImageURL
@@ -433,7 +428,7 @@ class Tenet_Generator {
         $id = media_sideload_image( $url, 0, $desc, 'id' );
 
         if ( is_wp_error( $id ) ) {
-            throw new Exception( 'Erro ao baixar imagem: ' . $id->get_error_message() );
+            throw new Exception( __( 'Erro ao baixar imagem: ', 'tenet' ) . $id->get_error_message() );
         }
 
         return $id;
@@ -461,7 +456,7 @@ class Tenet_Generator {
         $post_id = wp_insert_post( $post_arr );
 
         if ( is_wp_error( $post_id ) ) {
-            throw new Exception( 'Erro ao criar post: ' . $post_id->get_error_message() );
+            throw new Exception( __( 'Erro ao criar post: ', 'tenet' ) . $post_id->get_error_message() );
         }
 
         // Set Featured Image
