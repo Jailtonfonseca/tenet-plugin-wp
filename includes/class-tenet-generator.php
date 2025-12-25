@@ -15,22 +15,52 @@ class Tenet_Generator {
     private $openrouter_model;
 
     public function __construct() {
-        $this->pixabay_key = defined( 'TENET_PIXABAY_KEY' ) ? TENET_PIXABAY_KEY : get_option( 'tenet_pixabay_key' );
-        $this->post_status = get_option( 'tenet_post_status', 'draft' );
-
-        $this->ai_provider = get_option( 'tenet_ai_provider', 'openai' );
-
-        $this->openai_key = defined( 'TENET_OPENAI_KEY' ) ? TENET_OPENAI_KEY : get_option( 'tenet_openai_key' );
-        $this->openai_model = get_option( 'tenet_openai_model', 'gpt-4o' );
-
-        $this->gemini_key = defined( 'TENET_GEMINI_KEY' ) ? TENET_GEMINI_KEY : get_option( 'tenet_gemini_key' );
-        $this->gemini_model = get_option( 'tenet_gemini_model', 'gemini-1.5-pro' );
-
-        $this->openrouter_key = defined( 'TENET_OPENROUTER_KEY' ) ? TENET_OPENROUTER_KEY : get_option( 'tenet_openrouter_key' );
-        $this->openrouter_model = get_option( 'tenet_openrouter_model' );
+        // Constructor left intentionally empty.
+        // Settings are now loaded contextually via load_profile_settings() in generate_content().
     }
 
-    public function generate_content( $topic, $tone, $audience, $instructions, $category_id = 0 ) {
+    private function load_profile_settings( $profile_id = 0 ) {
+        $profile_data = array();
+        $profiles = get_option( 'tenet_profiles', array() );
+
+        // Try to find the specific profile
+        if ( ! empty( $profile_id ) && isset( $profiles[ $profile_id ] ) ) {
+            $profile_data = $profiles[ $profile_id ]['settings'];
+        }
+
+        // Helper to get value from profile or fallback to global option (Legacy support)
+        // If a profile IS selected (data is not empty), we prefer its value.
+        // If the value is missing in the profile, we default to '' or specific defaults.
+        // If NO profile is selected (legacy mode), we fall back to get_option().
+
+        $use_legacy = empty( $profile_data );
+
+        $get_val = function( $key, $default = '' ) use ( $profile_data, $use_legacy ) {
+            if ( ! $use_legacy ) {
+                return isset( $profile_data[ $key ] ) ? $profile_data[ $key ] : $default;
+            }
+            return get_option( $key, $default );
+        };
+
+        // Load Settings
+        $this->pixabay_key = defined( 'TENET_PIXABAY_KEY' ) ? TENET_PIXABAY_KEY : $get_val( 'tenet_pixabay_key' );
+        $this->post_status = $get_val( 'tenet_post_status', 'draft' );
+        $this->ai_provider = $get_val( 'tenet_ai_provider', 'openai' );
+
+        $this->openai_key   = defined( 'TENET_OPENAI_KEY' ) ? TENET_OPENAI_KEY : $get_val( 'tenet_openai_key' );
+        $this->openai_model = $get_val( 'tenet_openai_model', 'gpt-4o' );
+
+        $this->gemini_key   = defined( 'TENET_GEMINI_KEY' ) ? TENET_GEMINI_KEY : $get_val( 'tenet_gemini_key' );
+        $this->gemini_model = $get_val( 'tenet_gemini_model', 'gemini-1.5-pro' );
+
+        $this->openrouter_key   = defined( 'TENET_OPENROUTER_KEY' ) ? TENET_OPENROUTER_KEY : $get_val( 'tenet_openrouter_key' );
+        $this->openrouter_model = $get_val( 'tenet_openrouter_model' );
+    }
+
+    public function generate_content( $topic, $tone, $audience, $instructions, $category_id = 0, $profile_id = 0 ) {
+        // 0. Load Configuration Profile
+        $this->load_profile_settings( $profile_id );
+
         // 1. Memory & Linking Module
         $context_data = $this->get_contextual_posts( 30, $category_id );
 
