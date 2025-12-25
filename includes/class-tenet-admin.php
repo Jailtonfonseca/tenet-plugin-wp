@@ -236,6 +236,61 @@ class Tenet_Admin {
                     <input type="submit" name="tenet_generate" id="submit" class="button button-primary" value="Gerar Conteúdo">
                 </p>
             </form>
+
+            <hr>
+
+            <h2>Últimos Posts Gerados</h2>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th scope="col" class="manage-column column-title">Título</th>
+                        <th scope="col" class="manage-column column-date">Data</th>
+                        <th scope="col" class="manage-column column-status">Status</th>
+                        <th scope="col" class="manage-column column-primary">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $args = array(
+                        'post_type'   => 'post',
+                        'post_status' => 'any',
+                        'meta_key'    => '_tenet_generated',
+                        'meta_value'  => 1,
+                        'posts_per_page' => 5,
+                        'orderby'     => 'date',
+                        'order'       => 'DESC'
+                    );
+                    $query = new WP_Query( $args );
+
+                    if ( $query->have_posts() ) {
+                        while ( $query->have_posts() ) {
+                            $query->the_post();
+                            $post_id = get_the_ID();
+                            $edit_link = get_edit_post_link( $post_id );
+                            ?>
+                            <tr>
+                                <td><strong><?php the_title(); ?></strong></td>
+                                <td><?php echo get_the_date( 'd/m/Y H:i' ); ?></td>
+                                <td><?php echo get_post_status_object( get_post_status() )->label; ?></td>
+                                <td>
+                                    <?php if ( $edit_link ) : ?>
+                                        <a href="<?php echo esc_url( $edit_link ); ?>" class="button button-small button-secondary" target="_blank">Editar</a>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php
+                        }
+                        wp_reset_postdata();
+                    } else {
+                        ?>
+                        <tr>
+                            <td colspan="4">Nenhum post gerado recentemente.</td>
+                        </tr>
+                        <?php
+                    }
+                    ?>
+                </tbody>
+            </table>
         </div>
         <?php
     }
